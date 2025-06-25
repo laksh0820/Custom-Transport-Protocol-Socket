@@ -1,11 +1,3 @@
-/*
-    ============================================================
-    Assignment 4 Submission
-    Name: Lakshya Agrawal
-    Roll number: 22CS30036
-    ============================================================
-*/
-
 #ifndef HEADER_H
 #define HEADER_H
 
