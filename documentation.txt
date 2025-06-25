@@ -1,0 +1,210 @@
+---------------------------
+ASSIGNMENT 4
+Name    : Lakshya Agrawal
+Roll No : 22CS30036
+---------------------------
+
+-------------------------------------------------------------------
+                TABLE (WITH VARYING P values)
+-------------------------------------------------------------------
+
+--------------------------------------------------------------------------------------------------
+| PROB_DROP  | TOTAL_TRANSMISSIONS  | NO_OF_MSG_GENERATED_FROM_FILE  | AVG_TRANSMISSIONS_PER_MSG |
+--------------------------------------------------------------------------------------------------
+|   0.05     |         168          |              103               |          1.631            |
+|   0.10     |         166          |              103               |          1.612            |
+|   0.15     |         211          |              103               |          2.049            |
+|   0.20     |         202          |              103               |          1.961            |
+|   0.25     |         247          |              103               |          2.398            |
+|   0.30     |         277          |              103               |          2.689            |
+|   0.35     |         304          |              103               |          2.951            |
+|   0.40     |         352          |              103               |          3.417            |
+|   0.45     |         360          |              103               |          3.495            |
+|   0.50     |         499          |              103               |          4.845            |
+--------------------------------------------------------------------------------------------------
+
+-------------------------------------------------------------------
+                        GLOBAL VARIABLES
+-------------------------------------------------------------------
+
+int semid:
+Semaphore ID for ensuring mutual exclusion.
+
+struct sembuf pop, vop:
+Structures used to define operations on semaphores (P and V operations).
+
+int shmid:
+Shared memory ID for storing socket information.
+
+int nospace[MAXNKSOCK]:
+Array to store the "no space" flag for each socket if the receiving buffer is full.
+
+struct ksock_info *SM:
+Pointer to shared memory for accessing socket information.
+
+-------------------------------------------------------------------
+                            MACROS
+-------------------------------------------------------------------
+
+T: Constant value 5.
+PROB_DROP: Probability of dropping a message (0.05).
+KEY: Shared memory key (101).
+SEMKEY: Semaphore key (102).
+MAXNKSOCK: Maximum number of KTP sockets (10).
+MAXNMSG: Maximum number of messages (10).
+MAXSEQNUM: Maximum sequence number (255).
+MSGSIZE: Size of a message (512 bytes).
+DATAMSG: Message type for data (0).
+ACKMSG: Message type for acknowledgment (1).
+QUERYMSG: Message type for query (2).
+SOCK_KTP: KTP socket identifier (100).
+ENOSPACE: Error code for no space (200).
+ENOTBOUND: Error code for socket not bound (201).
+ENOMESSAGE: Error code for no message available (202).
+
+-------------------------------------------------------------------
+            DATA STRUCTURES AND FUNCTIONALITES
+-------------------------------------------------------------------
+
+1. struct swnd
+    Purpose: 
+    Represents the sending window for managing sequence numbers and timers for sent messages.
+    
+    Fields:
+    int size: Current size of the sending window.
+    int seq[MAXNMSG]: Array to store sequence numbers of messages in the window.
+    int next: Next sequence number to be used for sending a message.
+    time_t timer: Timer for messages within the range [0..next-1].
+
+2. struct swnd_buff
+    Purpose: 
+    Manages the sender's message buffer for storing unacknowledged messages.
+    
+    Fields:
+    int start: Index of the oldest message not yet acknowledged.
+    int end: Index where new messages will be stored.
+    char data[MAXNMSG][MSGSIZE]: Buffer to store messages.
+
+3. struct rwnd
+    Purpose: 
+    Represents the receiving window for managing expected sequence numbers.
+
+    Fields:
+    int size: Current size of the receiving window.
+    int seq[MAXNMSG]: Array to store sequence numbers of expected messages.
+
+4. struct rwnd_buff
+    Purpose: 
+    Manages the receiver's message buffer for storing received but unread messages.
+
+    Fields:
+    int read_seq: Sequence number of the next message to be read.
+    int rcv_seq[MAXNMSG]: Array to track whether a buffer slot is occupied (-1 if empty, otherwise the sequence number of the message).
+    char data[MAXNMSG][MSGSIZE]: Buffer to store received messages.
+
+5. struct ksock_info
+    Purpose: 
+    Stores information about each KTP socket.
+
+    Fields:
+    int isalloc: Indicates whether the socket is allocated.
+    int pid: Process ID associated with the socket.
+    int udp_sockfd: UDP socket file descriptor.
+    int isbind: Indicates whether the socket is bound.
+    struct sockaddr_in src_addr: Source address.
+    struct sockaddr_in dest_addr: Destination address.
+    struct swnd_buff send_buff: Sender's message buffer.
+    struct rwnd_buff rcv_buff: Receiver's message buffer.
+    struct swnd send_info: Sending window information.
+    struct rwnd rcv_info: Receiving window information.
+
+6. struct KTPHeader
+    Purpose: 
+    Represents the header of a KTP message.
+
+    Fields:
+    int type: Type of the message (e.g., DATAMSG, ACKMSG, QUERYMSG).
+    int seq_no: Sequence number of the message.
+    int ack_no: Acknowledgment number.
+    int rwnd_size: Size of the receiver's window.
+    int ref_type: Reference type (additional metadata).
+
+7. struct KTPMessage
+    Purpose: 
+    Represents a complete KTP message, including header and data.
+
+    Fields:
+    struct KTPHeader header: Header of the message.
+    char data[MSGSIZE]: Payload/data of the message.
+
+-------------------------------------------------------------------
+                    FUNCTIONS PROTOTYPE
+-------------------------------------------------------------------
+
+int k_socket(int domain, int type, int protocol): 
+Creates a KTP socket.
+
+int k_bind(int ksockfd, const struct sockaddr_in src_addr, socklen_t src_addrlen, const struct sockaddr_in dest_addr, socklen_t dest_addrlen):
+Binds a KTP socket to source and destination addresses.
+
+ssize_t k_sendto(int ksockfd, char buff[], size_t len, int flags, const struct sockaddr_in dest_addr, socklen_t dest_addrlen):
+Sends a message to the specified destination address.
+
+ssize_t k_recvfrom(int ksockfd, char buff[], size_t len, int flags):
+Receives a message from the socket.
+
+int k_close(int fd):
+Closes a KTP socket.
+
+int dropMessage(float p):
+Simulates message dropping based on probability p.
+
+const char *errmsg(int err):
+Returns an error message corresponding to the error code.
+
+-------------------------------------------------------------------
+                    AUXILIARY FUNCTIONS
+-------------------------------------------------------------------
+
+int isFull(struct ksock_info* SM, int ksockfd):
+Checks if the sender's buffer is full for the given socket.
+
+int isempty(struct ksock_info* SM, int ksockfd):
+Checks if the sender's buffer is empty for the given socket.
+
+int max(int a, int b):
+Returns the maximum of two integers.
+
+void send_msg(int ksockfd, int type, int seq_no, int ack_no, int rwnd_size, int ref_type, char data[]):
+Sends a message to the specified destination address.
+
+void rwnd_slide(int ksockfd, int end):
+Updates the receiving window.
+
+void swnd_slide(int ksockfd, int end):
+Updates the sending window.
+
+int getfreeslot(int rcv_seq[]):
+Returns the index of a free slot in the receiving buffer.
+
+int getlastinorderidx(int rcv_seq[], int seq[]):
+Returns the index of the last in-order acknowledged message.
+
+void garbage_collector():
+Cleans up sockets if the process exits without closing them.
+
+int is_process_running(int pid):
+Check whether a process is running or not
+
+void cleanup_ksocket(int fd):
+Clean the ksocket
+
+-------------------------------------------------------------------
+                    THREAD FUNCTIONS
+-------------------------------------------------------------------
+
+void *thread_R():
+Handles all messages received from the KTP socket.
+
+void *thread_S():
+Handles timeouts and retransmissions.
