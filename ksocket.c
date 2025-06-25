@@ -1,11 +1,3 @@
-/*
-    ============================================================
-    Assignment 4 Submission
-    Name: Lakshya Agrawal
-    Roll number: 22CS30036
-    ============================================================
-*/
-
 #include "ksocket.h"
 
 // Structure used to define operation on the semaphores in semaphore set
